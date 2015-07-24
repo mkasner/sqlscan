@@ -8,26 +8,39 @@ import (
 	"text/template"
 )
 
+var (
+	WRAPPER_DEFAULT = "%s"
+	WRAPPER_STRING  = `"%s"`
+	WRAPPER_PARAM   = `t.%s`
+)
+
 func GenerateFieldList(typeName string, fields []string) string {
-	return fmt.Sprintf(fieldList, typeName, typeName, conjoin(",", fields))
+	return fmt.Sprintf(fieldList, typeName, typeName, conjoin(",", WRAPPER_DEFAULT, fields))
 }
 
-func conjoin(conj string, items []string) string {
+func GenerateFieldListV2(typeName string, fields []string) string {
+	return fmt.Sprintf(fieldListV2, typeName, typeName, conjoin(",", WRAPPER_STRING, fields))
+}
+func GenerateValueList(typeName string, fields []string) string {
+	return fmt.Sprintf(valueList, typeName, typeName, conjoin(",", WRAPPER_PARAM, fields))
+}
+
+func conjoin(conj string, wrapper string, items []string) string {
 	if len(items) == 0 {
 		return ""
 	}
 	if len(items) == 1 {
-		return items[0]
+		return fmt.Sprintf(wrapper, items[0])
 	}
 	if len(items) == 2 { // "a and b" not "a, and b"
-		return items[0] + conj + items[1]
+		return fmt.Sprintf(wrapper, items[0]) + conj + fmt.Sprintf(wrapper, items[1])
 	}
 
-	pieces := []string{items[0]}
+	pieces := []string{fmt.Sprintf(wrapper, items[0])}
 	for _, item := range items[1 : len(items)-1] {
-		pieces = append(pieces, conj, item)
+		pieces = append(pieces, conj, fmt.Sprintf(wrapper, item))
 	}
-	pieces = append(pieces, conj, items[len(items)-1])
+	pieces = append(pieces, conj, fmt.Sprintf(wrapper, items[len(items)-1]))
 
 	return strings.Join(pieces, "")
 }
@@ -38,9 +51,21 @@ func (t *%s) Fields() string {
 }
 `
 
+const fieldListV2 = `// Returns all field names from %s
+func (t *%s) Fields() []string {
+	return []string{%s}
+}
+`
+
+const valueList = `// Returns all values from %s
+func (t *%s) Values() []interface{} {
+	return []interface{}{%s}
+}
+`
+
 func GenerateScanFn(typeName string, fields []string) string {
 	funcs := make(map[string]interface{})
-	funcs["conjoin"] = conjoin
+	// funcs["conjoin"] = conjoin
 	scanFunctions := []string{scanFn, scanRowFn}
 	var buff bytes.Buffer
 	for _, sf := range scanFunctions {

@@ -25,7 +25,8 @@ import (
 
 var (
 	typeNames = flag.String("type", "", "comma-separated list of type names; must be set")
-	output    = flag.String("output", "", "output file name; default srcdir/<type>_scan.go")
+	output    = flag.String("output", "", "output file name; default srcdir/sqlscan_gen.go")
+	version   = flag.Int("version", 1, "version of sqlacan")
 )
 
 // Usage is a replacement usage function for the flags package.
@@ -60,6 +61,10 @@ func main() {
 		dir string
 		g   Generator
 	)
+	if *version > 1 {
+		g.version = *version
+	}
+	//log.Printf("version %d", g.version)
 	if len(args) == 1 && isDirectory(args[0]) {
 		dir = args[0]
 		g.parsePackageDir(args[0])
@@ -86,7 +91,7 @@ func main() {
 	// Write to file.
 	outputName := *output
 	if outputName == "" {
-		baseName := fmt.Sprintf("%s_scan.go", types[0])
+		baseName := fmt.Sprintf("sqlscan_gen.go")
 		outputName = filepath.Join(dir, strings.ToLower(baseName))
 	}
 	err := ioutil.WriteFile(outputName, src, 0644)
@@ -107,8 +112,9 @@ func isDirectory(name string) bool {
 // Generator holds the state of the analysis. Primarily used to buffer
 // the output for format.Source.
 type Generator struct {
-	buf bytes.Buffer // Accumulated output.
-	pkg *Package     // Package we are scanning.
+	buf     bytes.Buffer // Accumulated output.
+	pkg     *Package     // Package we are scanning.
+	version int          // Version of generator
 }
 
 func (g *Generator) Printf(format string, args ...interface{}) {
@@ -228,7 +234,8 @@ func (g *Generator) generate(typeName string) {
 			fields = append(fields, file.fields...)
 			columns = append(columns, file.columns...)
 			if len(fields) > 0 {
-				g.buildFieldList(typeName, columns)
+				g.buildFieldList(typeName, columns, g.version)
+				g.buildValueList(typeName, fields, g.version)
 				g.buildScanFn(typeName, fields)
 			}
 		}
@@ -371,11 +378,29 @@ func (tag StructTag) Get(key string) string {
 	return ""
 }
 
-func (g *Generator) buildFieldList(typeName string, fields []string) {
+func (g *Generator) buildFieldList(typeName string, fields []string, version int) {
 	g.Printf("\n")
 	// fields := []string{"hello", "world"}
+	switch version {
+	case 2:
+		g.Printf(sqlscan.GenerateFieldListV2(typeName, fields))
+	default:
+		g.Printf(sqlscan.GenerateFieldList(typeName, fields))
 
-	g.Printf(sqlscan.GenerateFieldList(typeName, fields))
+	}
+
+}
+
+func (g *Generator) buildValueList(typeName string, fields []string, version int) {
+	g.Printf("\n")
+	// fields := []string{"hello", "world"}
+	switch version {
+	case 2:
+		g.Printf(sqlscan.GenerateValueList(typeName, fields))
+	default:
+		//g.Printf(sqlscan.GenerateFieldList(typeName, fields))
+
+	}
 
 }
 
